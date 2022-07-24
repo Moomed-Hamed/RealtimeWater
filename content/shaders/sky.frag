@@ -1,28 +1,28 @@
 #version 430 core
 
-in vec4 fPosition;
-in vec4 fTexCoord;
+in vec4 tex;
 
 out vec4 FragColor;
 
-uniform mat4 WorldMatrix;
-uniform mat4 ViewMatrix;
-uniform mat4 ProjectionMatrix;
-layout(location = 3) uniform mat4 InverseViewProjectionMatrix;
+layout(location = 1) uniform mat4 inverse_view_proj;
 
-layout(binding = 0) uniform samplerCube SkyCubemap;
+layout(binding = 0) uniform samplerCube sky_cubemap;
 
-void main() {
-	vec4 viewRayFront = vec4(fTexCoord.xy * 2.0 - 1.0, -1.0, 1.0);
-	vec4 viewRayBack  = vec4(fTexCoord.xy * 2.0 - 1.0,  1.0, 1.0);
-		
-	vec4 viewRayFrontWorld = InverseViewProjectionMatrix * viewRayFront;
-	vec4 viewRayBackWorld  = InverseViewProjectionMatrix * viewRayBack;
+void main()
+{
+	// view ray
+	vec4 view_front = vec4(tex.xy * 2.0 - 1.0, -1.0, 1.0);
+	vec4 view_back  = vec4(tex.xy * 2.0 - 1.0,  1.0, 1.0);
 	
-	vec3 viewRayFrontWorldWDiv = viewRayFrontWorld.xyz / viewRayFrontWorld.w;
-	vec3 viewRayBackWorldWDiv  = viewRayBackWorld.xyz / viewRayBackWorld.w;
+	// convert to world coordinates
+	view_front = inverse_view_proj * view_front;
+	view_back  = inverse_view_proj * view_back;
 	
-	vec3 viewRayWorld = -normalize(viewRayFrontWorldWDiv - viewRayBackWorldWDiv);
+	// not sure what this is
+	vec3 front = view_front.xyz / view_front.w;
+	vec3 back  = view_back.xyz  / view_back.w;
 	
-	FragColor = texture(SkyCubemap, viewRayWorld);
+	vec3 view_ray = normalize(front - back) * -1;
+	
+	FragColor = texture(sky_cubemap, view_ray);
 }

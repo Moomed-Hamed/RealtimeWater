@@ -34,7 +34,8 @@ uint clampedIndex(uvec2 location) {
 		max(0, min(Dimension - 1, location.y))));
 }
 
-void main() {
+void main()
+{
 	uint index = calculateIndex(gl_GlobalInvocationID.xy);
 	
 	if (gl_GlobalInvocationID.x > 0 && gl_GlobalInvocationID.x < Dimension - 1 &&
@@ -45,7 +46,7 @@ void main() {
 		float c = 0.1;
 		float h = 2.0 / float(Dimension);
 		
-		// f = c^2*(u[i+1,j]+u[i-1,j]+u[i,j+1]+u[i,j-1] – 4u[i,j])/h^2
+		// f = c^2 * (u[i+1, j] + u[i-1, j] + u[i, j+1] + u[i, j-1] – 4u[i, j]) / h^2
 		float f = c * c * (
 			positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(-1,  0))].y + 
 			positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2( 1,  0))].y + 
@@ -68,7 +69,7 @@ void main() {
 			vec2 p2 = vec2(Dimension * 0.7, Dimension * 0.8);
 		
 			float efunction2 = (1.0 / sqrt(2.0 * 3.41)) * exp(-(1.0 / 2) * length(vec2(gl_GlobalInvocationID.xy) - p1));
-			position.y += efunction2 * 0.02;				
+			position.y += efunction2 * 0.025;				
 			
 			float efunction3 = (1.0 / sqrt(2.0 * 3.41)) * exp(-(1.0 / 2) * length(vec2(gl_GlobalInvocationID.xy) - p2));
 			position.y += efunction3 * 0.02;

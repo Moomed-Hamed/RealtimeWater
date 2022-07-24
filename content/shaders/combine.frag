@@ -1,41 +1,21 @@
 #version 430 core
 
-in vec2 fTexCoord;
+in vec2 tex_coord;
 
 out vec4 FragColor;
 
-layout(binding = 0) uniform sampler2D BackgroundColorTexture;
-layout(binding = 1) uniform sampler2D BackgroundDepthTexture;
-layout(binding = 2) uniform sampler2D WaterColorTexture;
-layout(binding = 3) uniform sampler2D WaterDepthTexture;
+layout(binding = 0) uniform sampler2D BackgroundColor;
+layout(binding = 1) uniform sampler2D BackgroundDepth;
+layout(binding = 2) uniform sampler2D WaterColor;
+layout(binding = 3) uniform sampler2D WaterDepth;
 
-void main() {
-	float waterDepth = texture2D(WaterDepthTexture, fTexCoord).r;
-	float backgroundDepth = texture2D(BackgroundDepthTexture, fTexCoord).r;
+void main()
+{
+	float water_depth      = texture2D(WaterDepth, tex_coord).r;
+	float background_depth = texture2D(BackgroundDepth, tex_coord).r;
 	
-	if (waterDepth < backgroundDepth) {
-		FragColor = texture2D(WaterColorTexture, fTexCoord);
-	} else {
-		FragColor = texture2D(BackgroundColorTexture, fTexCoord);		
-	}
+	if (water_depth < background_depth)
+		FragColor = texture2D(WaterColor, tex_coord);
+	else
+		FragColor = texture2D(BackgroundColor, tex_coord);
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

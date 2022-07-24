@@ -1,6 +1,5 @@
 #version 430 core
 
-in vec4 fModelPosition;
 in vec4 fWorldPosition;
 in vec3 fNormal;
 in vec2 fTexCoord;
@@ -9,9 +8,8 @@ out vec4 FragColor;
 
 layout(location = 4) uniform mat4 WaterMapProjectionMatrix;
 layout(location = 5) uniform mat4 WaterMapViewMatrix;
-layout(location = 6) uniform vec3 LightPosition;
-layout(location = 7) uniform float TextureScale;
-layout(location = 8) uniform float Time;
+layout(location = 6) uniform float TextureScale;
+layout(location = 7) uniform float Time;
 
 layout(binding = 0) uniform sampler2D WaterMapDepth;
 layout(binding = 1) uniform sampler2D WaterMapNormals;
@@ -20,12 +18,13 @@ layout(binding = 3) uniform sampler2D NoiseNormalTexture;
 layout(binding = 4) uniform sampler2D CausticTexture;
 layout(binding = 5) uniform sampler1D SubSurfaceScatteringTexture;
 
-float inverseDepthRangeTransformation(float depth) {
-    return (2.0 * depth - gl_DepthRange.near - gl_DepthRange.far) /
-            (gl_DepthRange.far - gl_DepthRange.near);
+float inverseDepthRangeTransformation(float depth)
+{
+    return (2.0 * depth - gl_DepthRange.near - gl_DepthRange.far) / (gl_DepthRange.far - gl_DepthRange.near);
 }
 
-vec3 positionFromDepth(vec2 texCoord, sampler2D depthTexture, mat4 inverseViewProjection) {
+vec3 positionFromDepth(vec2 texCoord, sampler2D depthTexture, mat4 inverseViewProjection)
+{
     vec4 n = vec4(texCoord * 2.0 - 1.0, 0.0, 0.0);
     float depth = texture2D(depthTexture, texCoord).r;
     n.z = inverseDepthRangeTransformation(depth);
@@ -35,16 +34,19 @@ vec3 positionFromDepth(vec2 texCoord, sampler2D depthTexture, mat4 inverseViewPr
     return worldPosition.xyz / worldPosition.w;
 }
 
-vec3 getWaterWorldPosition(vec2 texCoord) {
+vec3 getWaterWorldPosition(vec2 texCoord)
+{
 	mat4 inverseViewProjection = inverse(WaterMapProjectionMatrix * WaterMapViewMatrix);
 	return positionFromDepth(texCoord, WaterMapDepth, inverseViewProjection);
 }
 
-vec3 decodeNormal(vec4 normal) {
+vec3 decodeNormal(vec4 normal)
+{
     return vec3(normal.xyz * 2.0 - 1.0);
 }
 
-void main() {
+void main()
+{
 	// Projection the world position onto the watermap
 	vec4 waterMapCoordinate = WaterMapProjectionMatrix * WaterMapViewMatrix * fWorldPosition;
 	vec2 waterMapCoordinateWDiv = waterMapCoordinate.xy / waterMapCoordinate.w;
@@ -65,7 +67,8 @@ void main() {
 	vec4 textureColor = texture2D(Texture, fTexCoord * TextureScale);
 
 	// Above or below water surface
-	if (waterMapCoordinate.z > waterZDepth) { // Under water 
+	if (waterMapCoordinate.z > waterZDepth) // Under water 
+	{
 		// Attenuation due to participating media
 		const float DENSITY = 8;
 		float attenuation = exp(-DENSITY * waterDepth); // 1 / attenuation!
@@ -89,7 +92,9 @@ void main() {
 		vec4 causticLight = CAUSTIC_STRENGTH * waterDepth * attenuation * texture2D(CausticTexture, 20 * normalizedWaterMapCoordinate + CAUSTIC_DISTORTION * waterNormal.xz + CAUSTIC_DISTORTION * noiseNoisingDirection);
 	
 		FragColor = textureColor * (groundLight + subsurfaceLight + causticLight);
-	} else { // Above water
+	}
+	else // Above water
+	{
 		FragColor = textureColor * surfaceLight;
 	}
 }

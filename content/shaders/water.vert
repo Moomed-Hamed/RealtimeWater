@@ -11,7 +11,7 @@ out vec3 fNormal;
 out vec2 fTexCoord;
 out float fVelocity;
 
-layout(location = 0) uniform mat4 WorldMatrix;
+layout(location = 0) uniform vec4 world_position;
 layout(location = 1) uniform mat4 ViewMatrix;
 layout(location = 2) uniform mat4 ProjectionMatrix;
 layout(location = 3) uniform mat3 NormalMatrix;
@@ -19,7 +19,7 @@ layout(location = 3) uniform mat3 NormalMatrix;
 void main() {
 	fTexCoord = vTexCoord;
 	fNormal = NormalMatrix * vNormal;
-	fWorldPosition = WorldMatrix * vPosition;
+	fWorldPosition = world_position + vPosition;
 	fVelocity = vPosition.w;
 	vec4 dc = ProjectionMatrix * ViewMatrix * fWorldPosition;
 	fNdc = dc.xyz / dc.w;
