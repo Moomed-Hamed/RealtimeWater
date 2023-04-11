@@ -65,7 +65,6 @@ uint random_uint()
 	seed ^= (seed >> 8);
 	return seed;
 }
-
 float noise_chance(uint n, uint seed = 0) // normalized
 {
 	n *= BIT_NOISE_1;
@@ -78,12 +77,10 @@ float noise_chance(uint n, uint seed = 0) // normalized
 
 	return (float)n / (float)UINT_MAX;
 }
-
 float lerp(float start, float end, float amount)
 {
 	return (start + amount * (end - start));
 }
-
 float perlin(float n)
 {
 	int x1 = (int)n;
@@ -91,7 +88,6 @@ float perlin(float n)
 
 	return lerp(noise_chance(x1), noise_chance(x2), n - (float)x1);
 }
-
 byte* read_text_file_into_memory(const char* path)
 {
 	DWORD BytesRead;

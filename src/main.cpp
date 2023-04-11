@@ -191,7 +191,7 @@ int main()
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
 		}
 
-		// Render ground
+		// render skybox
 		{
 			glBindFramebuffer(GL_DRAW_FRAMEBUFFER, backgroundFramebuffer.id);
 			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -207,6 +207,8 @@ int main()
 				glBindVertexArray(0);
 				glEnable(GL_DEPTH_TEST);
 			}
+
+			// Render ground
 			bind(ground_shader);
 			{
 				set_vec4  (ground_shader, "world_position"     , vec4(0) );
@@ -277,8 +279,6 @@ int main()
 			glDrawArrays(GL_TRIANGLES, 0, 6);
 			glBindVertexArray(0);
 		}
-
-		swap_buffers(water);
 
 		char title[16] = {};
 		snprintf(title, 16, "%04f", 1.f / timer.end_frame());

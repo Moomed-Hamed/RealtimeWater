@@ -38,7 +38,6 @@ GLuint import_texture(const char* path)
 
 	return id;
 }
-
 GLuint create_subsurf_texture()
 {
 	const int size = 3;
@@ -62,7 +61,6 @@ GLuint create_subsurf_texture()
 
 	return id;
 }
-
 GLuint createCubemap()
 {
 	GLuint id = {};
@@ -153,6 +151,7 @@ struct Vertex {
 
 float heightFunction(vec2 coordinate)
 {
+	return 0 - coordinate.y;// sin(TWOPI * 8 * coordinate.x);
 	float COORDINATE_STRETCH = 5.0f;
 	float EFUNCTION_STRETCH = 10.0f;
 	float EFUNCTION_WEIGHT = -0.7f;
@@ -163,56 +162,68 @@ float heightFunction(vec2 coordinate)
 	auto correctedCoordinate = (vec2{ 1.0 } - coordinate) * COORDINATE_STRETCH - vec2{ 0.0f };
 	auto efunction = (1.0f / sqrt(2.0f * PI)) * exp(-(1.0f / EFUNCTION_STRETCH) * correctedCoordinate.x * correctedCoordinate.x);
 
-	return static_cast<float>(HEIGHT * (0.1 + EFUNCTION_WEIGHT * efunction + NOISE_WEIGHT * glm::simplex(coordinate * NOISE_STRETCH)));
-};
-std::vector<Vertex> createMeshVertices(unsigned dimension, bool water)
-{
-	std::vector<Vertex> vertices;
-	unsigned dimension1 = dimension + 1;
-	for(int x = 0; x < dimension1; x++) {
-	for(int y = 0; y < dimension1; y++)
+	float height = static_cast<float>(HEIGHT * (0.1 + EFUNCTION_WEIGHT * efunction + NOISE_WEIGHT * glm::simplex(coordinate * NOISE_STRETCH)));
+
+	static float big = 0;
+	if (height > big)
 	{
-		auto normalizedPosition = vec2(x / float(dimension), y / float(dimension));
+		big = height;
+		out(big);
+	}
 
-		const auto NORMAL_EPSILON = 0.1f / dimension;
-		auto epsilonPositionX = normalizedPosition + vec2{ NORMAL_EPSILON, 0 };
-		auto epsilonPositionY = normalizedPosition + vec2{ 0, NORMAL_EPSILON };
-
-		auto currentHeight  = water ? 0.f : heightFunction(normalizedPosition);
-		auto epsilonHeightX = water ? 0.f : heightFunction(epsilonPositionX);
-		auto epsilonHeightY = water ? 0.f : heightFunction(epsilonPositionY);
-
-		auto position = vec3{ normalizedPosition.x, currentHeight, normalizedPosition.y };
-
-		auto toEpsilonX = vec3{ epsilonPositionX.x, epsilonHeightX, epsilonPositionX.y } - position;
-		auto toEpsilonY = vec3{ epsilonPositionY.x, epsilonHeightY, epsilonPositionY.y } - position;
-
-		auto normal = glm::normalize(glm::cross(toEpsilonY, toEpsilonX));
-
-		auto texCoord = normalizedPosition;
-		vertices.push_back(Vertex{ position, normal, texCoord });
-	} }
-	return vertices;
-}
-std::vector<GLuint> createMeshIndices(unsigned dimension)
+	return height;
+};
+void create_mesh(uint resolution, bool water, vec4* positions, vec4* normals, vec2* tex_coords, uint* indices)
 {
-	std::vector<GLuint> indices;
-	unsigned verticesPerRow = dimension + 1;
-	for(int x = 0; x < dimension; x++) {
-	for(int y = 0; y < dimension; y++)
+	float DX = 0.1f / resolution; // offset for calculating normals
+
+	uint i = 0;
+	for (uint x = 0; x <= resolution; x++) {
+	for (uint y = 0; y <= resolution; y++)
+	{
+		vec2 normalized_position = vec2(x, y) / float(resolution);
+
+		// height of the vertex
+		float height = water ? 0.f : heightFunction(normalized_position);
+		vec3 position = { normalized_position.x, height, normalized_position.y };
+
+		// normal vector
+		vec2 dx_pos = normalized_position + vec2{ DX, 0  };
+		vec2 dy_pos = normalized_position + vec2{ 0 , DX };
+
+		float dx_height = water ? 0.f : heightFunction(dx_pos);
+		float dy_height = water ? 0.f : heightFunction(dy_pos);
+
+		vec3 dx_dir = vec3{ dx_pos.x, dx_height, dx_pos.y } - position;
+		vec3 dy_dir = vec3{ dy_pos.x, dy_height, dy_pos.y } - position;
+
+		vec3 normal = normalize(cross(dy_dir, dx_dir));
+		vec2 texture_coordinate = normalized_position;
+
+		positions  [i  ] = vec4(position, 0);
+		normals    [i  ] = vec4(normal  , 0);
+		tex_coords [i++] = texture_coordinate;
+	} }
+
+	// indices
+
+	uint vertices_per_row = resolution + 1;
+
+	i = 0;
+	for (uint x = 0; x < resolution; x++) {
+	for (uint y = 0; y < resolution; y++)
 	{
 		// Triangle 1
-		indices.push_back(y * verticesPerRow + x);
-		indices.push_back(y * verticesPerRow + (x + 1));
-		indices.push_back((y + 1) * verticesPerRow + (x + 1));
+		indices[i++] = (y + 0) * vertices_per_row + (x + 0);
+		indices[i++] = (y + 0) * vertices_per_row + (x + 1);
+		indices[i++] = (y + 1) * vertices_per_row + (x + 1);
 
 		// Triangle 2
-		indices.push_back(y * verticesPerRow + x);
-		indices.push_back((y + 1) * verticesPerRow + (x + 1));
-		indices.push_back((y + 1) * verticesPerRow + x);
+		indices[i++] = (y + 0) * vertices_per_row + (x + 0);
+		indices[i++] = (y + 1) * vertices_per_row + (x + 1);
+		indices[i++] = (y + 1) * vertices_per_row + (x + 0);
 	} }
 
-	return indices;
 }
 
 struct Mesh
@@ -221,86 +232,63 @@ struct Mesh
 	GLuint normals;
 	GLuint tex_coords;
 	GLuint elementArrayBuffer;
-	GLuint VAO[2];
+	GLuint VAO;
 	GLuint num_indices;
 	GLuint mesh_size;
 };
 
-void init(Mesh& mesh, int size, bool water = false)
+void init(Mesh& mesh, uint resolution, bool water = false)
 {
-	auto vertices = createMeshVertices(size, water);
-	auto indices = createMeshIndices(size);
+	uint num_vertices = (resolution + 1) * (resolution + 1);
+	uint num_indices  = resolution * resolution * 6;
 
-	auto vertexCount = (size + 1) * (size + 1);
-	mesh.num_indices = size * size * 6;
-	mesh.mesh_size = size;
+	vec4* positions  = Alloc(vec4, num_vertices);
+	vec4* normals    = Alloc(vec4, num_vertices);
+	vec2* tex_coords = Alloc(vec2, num_vertices);
+	uint* indices    = Alloc(uint, num_indices);
 
-	std::vector<vec4> positionData;
-	for (int i = 0; i < vertices.size(); i++)
-	{
-		positionData.push_back(vec4{ vertices[i].position, 0.0 });
-	}
+	create_mesh(resolution, water, positions, normals, tex_coords, indices);
 
-	std::vector<vec4> normalData;
-	for (int i = 0; i < vertices.size(); i++)
-	{
-		normalData.push_back(vec4{ vertices[i].normal, 0.0 });
-	}
+	mesh.num_indices = num_indices;
+	mesh.mesh_size   = resolution;
 
-	std::vector<vec2> texCoordData;
-	for (int i = 0; i < vertices.size(); i++)
-	{
-		texCoordData.push_back(vertices[i].texCoord);
-	}
-
-	// Position Buffer
+	// Position Buffers (2 of them)
 	glGenBuffers(2, mesh.positions);
 	glBindBuffer(GL_ARRAY_BUFFER, mesh.positions[0]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * vertexCount, positionData.data(), GL_DYNAMIC_COPY);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, positions, GL_DYNAMIC_COPY);
+
 	glBindBuffer(GL_ARRAY_BUFFER, mesh.positions[1]);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * vertexCount, positionData.data(), GL_DYNAMIC_COPY);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, positions, GL_DYNAMIC_COPY);
 
 	// Normal Buffer
 	glGenBuffers(1, &mesh.normals);
 	glBindBuffer(GL_ARRAY_BUFFER, mesh.normals);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * vertexCount, normalData.data(), GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, normals, GL_STATIC_DRAW);
 
 	// TexCoord Buffer
 	glGenBuffers(1, &mesh.tex_coords);
 	glBindBuffer(GL_ARRAY_BUFFER, mesh.tex_coords);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(vec2) * vertexCount, texCoordData.data(), GL_STATIC_DRAW);
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vec2) * num_vertices, tex_coords, GL_STATIC_DRAW);
 
 	// Element Buffer
 	glGenBuffers(1, &mesh.elementArrayBuffer);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.elementArrayBuffer);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * mesh.num_indices, indices.data(), GL_STATIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * mesh.num_indices, indices, GL_STATIC_DRAW);
 
-	glGenVertexArrays(2, mesh.VAO);
+	glGenVertexArrays(1, &mesh.VAO);
 
-	// VAO 1
-	setAttribPointer(mesh.VAO[0], Attrib::Position, mesh.positions[0], 3, GL_FLOAT, GL_FALSE, sizeof(vec4), 0);
-	setAttribPointer(mesh.VAO[0], Attrib::Normal  , mesh.normals     , 3, GL_FLOAT, GL_TRUE , sizeof(vec4), 0);
-	setAttribPointer(mesh.VAO[0], Attrib::TexCoord, mesh.tex_coords  , 2, GL_FLOAT, GL_FALSE, sizeof(vec2), 0);
-
-	// VAO 2
-	setAttribPointer(mesh.VAO[1], Attrib::Position, mesh.positions[1], 3, GL_FLOAT, GL_FALSE, sizeof(vec4), 0);
-	setAttribPointer(mesh.VAO[1], Attrib::Normal  , mesh.normals     , 3, GL_FLOAT, GL_TRUE , sizeof(vec4), 0);
-	setAttribPointer(mesh.VAO[1], Attrib::TexCoord, mesh.tex_coords  , 2, GL_FLOAT, GL_FALSE, sizeof(vec2), 0);
-}
-
-void swap_buffers(Mesh& mesh)
-{
-	std::swap(mesh.positions[0], mesh.positions[1]);
-	std::swap(mesh.VAO[0], mesh.VAO[1]);
+	setAttribPointer(mesh.VAO, Attrib::Position, mesh.positions[0], 3, GL_FLOAT, GL_FALSE, sizeof(vec4), 0);
+	setAttribPointer(mesh.VAO, Attrib::Normal  , mesh.normals     , 3, GL_FLOAT, GL_TRUE , sizeof(vec4), 0);
+	setAttribPointer(mesh.VAO, Attrib::TexCoord, mesh.tex_coords  , 2, GL_FLOAT, GL_FALSE, sizeof(vec2), 0);
 }
 
 void render(Mesh& mesh)
 {
-	glBindVertexArray(mesh.VAO[0]);
+	static bool flip = false;
+	if (flip = !flip)
+		std::swap(mesh.positions[0], mesh.positions[1]);
+
+	glBindVertexArray(mesh.VAO);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.elementArrayBuffer);
 	glDrawElements(GL_TRIANGLES, mesh.num_indices, GL_UNSIGNED_INT, nullptr);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);

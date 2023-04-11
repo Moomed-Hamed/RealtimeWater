@@ -22,10 +22,10 @@ layout (location = 0) uniform int Dimension;
 layout (location = 1) uniform float DeltaTime;
 layout (location = 2) uniform float Time;
 
-layout (binding = 0) uniform sampler2D NoiseTexture;
+//layout (binding = 0) uniform sampler2D NoiseTexture;
 
 uint calculateIndex(uvec2 location) {
-	return location.y * Dimension + location.x;
+	return (location.y * Dimension) + location.x;
 }
 
 uint clampedIndex(uvec2 location) {
@@ -38,9 +38,11 @@ void main()
 {
 	uint index = calculateIndex(gl_GlobalInvocationID.xy);
 	
+	float terrain_height = terrainPositions[index].y;
+
 	if (gl_GlobalInvocationID.x > 0 && gl_GlobalInvocationID.x < Dimension - 1 &&
 		gl_GlobalInvocationID.y > 0 && gl_GlobalInvocationID.y < Dimension - 1 &&
-		terrainPositions[index].y < 0) // The simulation should only happen when the terrain is below the water. 
+		terrain_height < 0) // simulate only when terrain is below water level. 
 	{	
 		vec4 position = positionsPrev[index];
 		float c = 0.1;
@@ -52,36 +54,35 @@ void main()
 			positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2( 1,  0))].y + 
 			positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2( 0, -1))].y + 
 			positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2( 0,  1))].y - 
-			4.0 * position.y) / (h * h);	
+			4.0 * position.y) / (h * h);
 
 		// v[i,j] = v[i,j] + f*∆t
-		position.w = position.w + f * DeltaTime;
+		position.w += f * DeltaTime;
 	
 		// unew[i,j] = u[i,j] + v[i]*∆t
-		position.y = position.y + position.w * DeltaTime;
+		position.y += position.w * DeltaTime;
 		
 		// Attenuation
 		position.w *= 0.997;
 
 		// Pulling up some water
-		if (int(Time) % 8 == 0) {		
-			vec2 p1 = vec2(Dimension * 0.1, Dimension * 0.9);
-			vec2 p2 = vec2(Dimension * 0.7, Dimension * 0.8);
+		if (int(Time) % 8 == 0)
+		{		
+			vec2 ripple_position = vec2(Dimension * 0.3, Dimension * 0.6);
 		
-			float efunction2 = (1.0 / sqrt(2.0 * 3.41)) * exp(-(1.0 / 2) * length(vec2(gl_GlobalInvocationID.xy) - p1));
-			position.y += efunction2 * 0.025;				
-			
-			float efunction3 = (1.0 / sqrt(2.0 * 3.41)) * exp(-(1.0 / 2) * length(vec2(gl_GlobalInvocationID.xy) - p2));
-			position.y += efunction3 * 0.02;
+			float scale = 0.025 / sqrt(6.28);
+			float ripple = exp(-(1.0 / 2) * length(vec2(gl_GlobalInvocationID.xy) - ripple_position));
+
+			position.y += scale * ripple;
 		}
 
-		positionsNew[index] = position;	
+		positionsNew[index] = position;
 		
 		vec4 normal = normals[index];
-		vec3 toPositiveX = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(1, 0))].xyz;
-		vec3 toPositiveY = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(0, 1))].xyz;
-		vec3 toNegativeX = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(-1, 0))].xyz;
-		vec3 toNegativeY = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(0, -1))].xyz;
+		vec3 toPositiveX = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(1 , 0 ))].xyz;
+		vec3 toPositiveY = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(0 , 1 ))].xyz;
+		vec3 toNegativeX = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(-1, 0 ))].xyz;
+		vec3 toNegativeY = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(0 , -1))].xyz;
 
 		vec3 normal1 = cross(toPositiveX, toPositiveY);	
 		vec3 normal2 = cross(toPositiveY, toNegativeX);	
