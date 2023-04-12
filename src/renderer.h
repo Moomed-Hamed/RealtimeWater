@@ -2,9 +2,7 @@
 
 #define DRAW_DISTANCE 1024.0f
 
-// ------------------------------------------------- //
 // -------------------- Shaders -------------------- //
-// ------------------------------------------------- //
 
 struct Shader { GLuint id; };
 
@@ -215,9 +213,44 @@ void set_mat4 (Shader shader, const char* name, mat4 value )
 	glUniformMatrix4fv(glGetUniformLocation(shader.id, name), 1, GL_FALSE, (float*)&value);
 }
 
-// ------------------------------------------------- //
+void mesh_add_attrib_float(GLuint attrib_id, uint stride, uint offset)
+{
+	glVertexAttribPointer(attrib_id, 1, GL_FLOAT, GL_FALSE, stride, (void*)offset);
+	glVertexAttribDivisor(attrib_id, 1);
+	glEnableVertexAttribArray(attrib_id);
+}
+void mesh_add_attrib_vec2 (GLuint attrib_id, uint stride, uint offset)
+{
+	glVertexAttribPointer(attrib_id, 2, GL_FLOAT, GL_FALSE, stride, (void*)offset);
+	glVertexAttribDivisor(attrib_id, 1);
+	glEnableVertexAttribArray(attrib_id);
+}
+void mesh_add_attrib_vec3 (GLuint attrib_id, uint stride, uint offset)
+{
+	glVertexAttribPointer(attrib_id, 3, GL_FLOAT, GL_FALSE, stride, (void*)offset);
+	glVertexAttribDivisor(attrib_id, 1);
+	glEnableVertexAttribArray(attrib_id);
+}
+void mesh_add_attrib_mat3 (GLuint attrib_id, uint stride, uint offset)
+{
+	glVertexAttribPointer(attrib_id, 3, GL_FLOAT, GL_FALSE, stride, (void*)offset);
+	glVertexAttribDivisor(attrib_id, 1);
+	glEnableVertexAttribArray(attrib_id);
+
+	++attrib_id;
+	offset += sizeof(vec3);
+	glVertexAttribPointer(attrib_id, 3, GL_FLOAT, GL_FALSE, stride, (void*)offset);
+	glVertexAttribDivisor(attrib_id, 1);
+	glEnableVertexAttribArray(attrib_id);
+
+	++attrib_id;
+	offset += sizeof(vec3);
+	glVertexAttribPointer(attrib_id, 3, GL_FLOAT, GL_FALSE, stride, (void*)offset);
+	glVertexAttribDivisor(attrib_id, 1);
+	glEnableVertexAttribArray(attrib_id);
+}
+
 // -------------------- Textures ------------------- //
-// ------------------------------------------------- //
 
 GLuint load_texture(const char* path)
 {
@@ -273,383 +306,7 @@ void bind_texture(GLuint texture, uint texture_unit = 0)
 	glBindTexture(GL_TEXTURE_2D, texture);
 }
 
-// ------------------------------------------------- //
-// ------------------ Mesh Loading ----------------- //
-// ------------------------------------------------- //
-
-struct Mesh_Data
-{
-	uint num_vertices, num_indices;
-
-	vec3* positions;
-	vec3* normals;
-	uint* indices;
-};
-
-struct Mesh_Data_UV
-{
-	uint num_vertices, num_indices;
-
-	vec3* positions;
-	vec3* normals;
-	vec2* textures;
-	uint* indices;
-};
-
-void load(Mesh_Data* data, const char* path)
-{
-	FILE* mesh_file = fopen(path, "rb");
-	if (!mesh_file) { print("could not open mesh file : %s\n", path); stop; return; }
-
-	fread(&data->num_vertices, sizeof(uint), 1, mesh_file);
-	fread(&data->num_indices , sizeof(uint), 1, mesh_file);
-
-	data->positions = (vec3*)calloc(data->num_vertices, sizeof(vec3));
-	data->normals   = (vec3*)calloc(data->num_vertices, sizeof(vec3));
-	data->indices   = (uint*)calloc(data->num_indices , sizeof(uint));
-
-	fread(data->positions, sizeof(vec3), data->num_vertices, mesh_file);
-	fread(data->normals  , sizeof(vec3), data->num_vertices, mesh_file);
-	fread(data->indices  , sizeof(uint), data->num_indices , mesh_file);
-}
-void load(Mesh_Data_UV* data, const char* path)
-{
-	FILE* mesh_file = fopen(path, "rb");
-	if (!mesh_file) { print("could not open model file: %s\n", path); stop; return; }
-
-	fread(&data->num_vertices, sizeof(uint), 1, mesh_file);
-	fread(&data->num_indices , sizeof(uint), 1, mesh_file);
-
-	data->positions = (vec3*)calloc(data->num_vertices, sizeof(vec3));
-	data->normals   = (vec3*)calloc(data->num_vertices, sizeof(vec3));
-	data->textures  = (vec2*)calloc(data->num_vertices, sizeof(vec2));
-	data->indices   = (uint*)calloc(data->num_indices , sizeof(uint));
-
-	fread(data->positions, sizeof(vec3), data->num_vertices, mesh_file);
-	fread(data->normals  , sizeof(vec3), data->num_vertices, mesh_file);
-	fread(data->textures , sizeof(vec2), data->num_vertices, mesh_file);
-	fread(data->indices  , sizeof(uint), data->num_indices , mesh_file);
-
-	fclose(mesh_file);
-}
-
-// ------------------------------------------------- //
-// ----------------- Mesh Rendering ---------------- //
-// ------------------------------------------------- //
-
-struct Drawable_Mesh
-{
-	GLuint VAO, VBO, EBO;
-	uint num_indices;
-};
-
-struct Drawable_Mesh_UV
-{
-	GLuint VAO, VBO, EBO;
-	uint num_indices;
-};
-void load(Drawable_Mesh* mesh, const char* path, uint reserved_mem_size = 0)
-{
-	Mesh_Data mesh_data;
-	load(&mesh_data, path);
-	mesh->num_indices = mesh_data.num_indices;
-
-	glGenVertexArrays(1, &(mesh->VAO));
-	glBindVertexArray(mesh->VAO);
-
-	uint vertmemsize = mesh_data.num_vertices * sizeof(vec3);
-	uint offset = reserved_mem_size;
-
-#define RENDER_MEM_SIZE (reserved_mem_size + (mesh_data.num_vertices * sizeof(vec3) * 2)) // '2' for positions & normals
-	glGenBuffers(1, &(mesh->VBO));
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->VBO);
-	glBufferData(GL_ARRAY_BUFFER, RENDER_MEM_SIZE, NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, offset, vertmemsize, mesh_data.positions);
-	glBufferSubData(GL_ARRAY_BUFFER, offset + vertmemsize, vertmemsize, mesh_data.normals);
-#undef RENDER_MEM_SIZE
-
-	glGenBuffers(1, &(mesh->EBO));
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh_data.num_indices * sizeof(uint), mesh_data.indices, GL_STATIC_DRAW);
-
-	free(mesh_data.positions);
-	free(mesh_data.normals);
-	free(mesh_data.indices);
-
-	offset = reserved_mem_size;
-	{
-		GLint pos_attrib = 0; // local position of a vertex
-		glVertexAttribPointer(pos_attrib, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)offset);
-		glEnableVertexAttribArray(pos_attrib);
-
-		GLint norm_attrib = 1; offset += vertmemsize; // normal of a vertex
-		glVertexAttribPointer(norm_attrib, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)offset);
-		glEnableVertexAttribArray(norm_attrib);
-	}
-}
-void load(Drawable_Mesh_UV* mesh, const char* path, uint reserved_mem_size = 0)
-{
-	Mesh_Data_UV mesh_data = {};
-	load(&mesh_data, path);
-	mesh->num_indices = mesh_data.num_indices;
-
-	glGenVertexArrays(1, &(mesh->VAO));
-	glBindVertexArray(mesh->VAO);
-
-	uint vertmemsize = mesh_data.num_vertices * sizeof(vec3);
-	uint texmemsize  = mesh_data.num_vertices * sizeof(vec2);
-	uint offset = reserved_mem_size;
-
-#define RENDER_MEM_SIZE (reserved_mem_size + (vertmemsize * 2) + texmemsize)
-	glGenBuffers(1, &(mesh->VBO));
-	glBindBuffer(GL_ARRAY_BUFFER, mesh->VBO);
-	glBufferData(GL_ARRAY_BUFFER, RENDER_MEM_SIZE, NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, offset, vertmemsize, mesh_data.positions);
-	glBufferSubData(GL_ARRAY_BUFFER, offset + vertmemsize, vertmemsize, mesh_data.normals);
-	glBufferSubData(GL_ARRAY_BUFFER, offset + vertmemsize + vertmemsize, texmemsize, mesh_data.textures);
-#undef RENDER_MEM_SIZE
-
-	glGenBuffers(1, &(mesh->EBO));
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh->EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, mesh_data.num_indices * sizeof(uint), mesh_data.indices, GL_STATIC_DRAW);
-
-	free(mesh_data.positions);
-	free(mesh_data.normals);
-	free(mesh_data.textures);
-	free(mesh_data.indices);
-
-	offset = reserved_mem_size;
-	{
-		GLint pos_attrib = 0; // position
-		glVertexAttribPointer(pos_attrib, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)offset);
-		glEnableVertexAttribArray(pos_attrib);
-
-		GLint norm_attrib = 1; offset += vertmemsize; // normal
-		glVertexAttribPointer(norm_attrib, 3, GL_FLOAT, GL_FALSE, sizeof(vec3), (void*)offset);
-		glEnableVertexAttribArray(norm_attrib);
-
-		GLint tex_attrib = 2; offset += vertmemsize; // texture coordinates
-		glVertexAttribPointer(tex_attrib, 2, GL_FLOAT, GL_FALSE, sizeof(vec2), (void*)offset);
-		glEnableVertexAttribArray(tex_attrib);
-	}
-}
-
-void update(Drawable_Mesh mesh, uint vb_size, byte* vb_data)
-{
-	glBindBuffer(GL_ARRAY_BUFFER, mesh.VBO);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, vb_size, vb_data);
-}
-void update(Drawable_Mesh_UV mesh, uint vb_size, byte* vb_data)
-{
-	glBindBuffer(GL_ARRAY_BUFFER, mesh.VBO);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, vb_size, vb_data);
-}
-
-void draw(Drawable_Mesh mesh, uint num_instances = 1)
-{
-	glBindVertexArray(mesh.VAO);
-	glDrawElementsInstanced(GL_TRIANGLES, mesh.num_indices, GL_UNSIGNED_INT, 0, num_instances);
-}
-void draw(Drawable_Mesh_UV mesh, uint num_instances = 1)
-{
-	glBindVertexArray(mesh.VAO);
-	glDrawElementsInstanced(GL_TRIANGLES, mesh.num_indices, GL_UNSIGNED_INT, 0, num_instances);
-}
-
-void mesh_add_attrib_float(GLuint attrib_id, uint stride, uint offset)
-{
-	glVertexAttribPointer(attrib_id, 1, GL_FLOAT, GL_FALSE, stride, (void*)offset);
-	glVertexAttribDivisor(attrib_id, 1);
-	glEnableVertexAttribArray(attrib_id);
-}
-void mesh_add_attrib_vec2 (GLuint attrib_id, uint stride, uint offset)
-{
-	glVertexAttribPointer(attrib_id, 2, GL_FLOAT, GL_FALSE, stride, (void*)offset);
-	glVertexAttribDivisor(attrib_id, 1);
-	glEnableVertexAttribArray(attrib_id);
-}
-void mesh_add_attrib_vec3 (GLuint attrib_id, uint stride, uint offset)
-{
-	glVertexAttribPointer(attrib_id, 3, GL_FLOAT, GL_FALSE, stride, (void*)offset);
-	glVertexAttribDivisor(attrib_id, 1);
-	glEnableVertexAttribArray(attrib_id);
-}
-void mesh_add_attrib_mat3 (GLuint attrib_id, uint stride, uint offset)
-{
-	glVertexAttribPointer(attrib_id, 3, GL_FLOAT, GL_FALSE, stride, (void*)offset);
-	glVertexAttribDivisor(attrib_id, 1);
-	glEnableVertexAttribArray(attrib_id);
-
-	++attrib_id;
-	offset += sizeof(vec3);
-	glVertexAttribPointer(attrib_id, 3, GL_FLOAT, GL_FALSE, stride, (void*)offset);
-	glVertexAttribDivisor(attrib_id, 1);
-	glEnableVertexAttribArray(attrib_id);
-
-	++attrib_id;
-	offset += sizeof(vec3);
-	glVertexAttribPointer(attrib_id, 3, GL_FLOAT, GL_FALSE, stride, (void*)offset);
-	glVertexAttribDivisor(attrib_id, 1);
-	glEnableVertexAttribArray(attrib_id);
-}
-
-// ------------------------------------------------- //
-// ---------- Deferred Rendering Pipeline ---------- //
-// ------------------------------------------------- //
-
-struct G_Buffer
-{
-	GLuint FBO; // frame buffer object
-	GLuint positions, normals, albedo; // textures
-	GLuint VAO, VBO, EBO; // for drawing the quad
-};
-
-G_Buffer make_g_buffer(Window window)
-{
-	G_Buffer buf = {};
-
-	glGenFramebuffers(1, &buf.FBO);
-	glBindFramebuffer(GL_FRAMEBUFFER, buf.FBO);
-
-	GLuint g_positions, g_normals, g_albedo;
-
-	// position color buffer
-	glGenTextures(1, &g_positions);
-	glBindTexture(GL_TEXTURE_2D, g_positions);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA32F, window.screen_width, window.screen_height, 0, GL_RGBA, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-	// normal color buffer
-	glGenTextures(1, &g_normals);
-	glBindTexture(GL_TEXTURE_2D, g_normals);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA16F, window.screen_width, window.screen_height, 0, GL_RGBA, GL_FLOAT, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-	// albedo color buffer
-	glGenTextures(1, &g_albedo);
-	glBindTexture(GL_TEXTURE_2D, g_albedo);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, window.screen_width, window.screen_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-
-	// tell OpenGL which color attachments we'll use (of this framebuffer) for rendering 
-	uint attachments[3] = { GL_COLOR_ATTACHMENT0, GL_COLOR_ATTACHMENT1, GL_COLOR_ATTACHMENT2 };
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, g_positions, 0);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT1, GL_TEXTURE_2D, g_normals  , 0);
-	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT2, GL_TEXTURE_2D, g_albedo   , 0);
-	glDrawBuffers(3, attachments);
-
-	// then also add render buffer object as depth buffer and check for completeness.
-	uint depth_render_buffer;
-	glGenRenderbuffers(1, &depth_render_buffer);
-	glBindRenderbuffer(GL_RENDERBUFFER, depth_render_buffer);
-	glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, window.screen_width, window.screen_height);
-	glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_RENDERBUFFER, depth_render_buffer);
-
-	if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) { out("FRAMEBUFFER ERROR : INCOMPLETE"); stop; }
-
-	buf.positions = g_positions;
-	buf.normals   = g_normals;
-	buf.albedo    = g_albedo;
-
-	// make a screen quad
-
-	float verts[] = {
-		// X     Y
-		-1.f, -1.f, // 0  1-------3
-		-1.f,  1.f, // 1  |       |
-		 1.f, -1.f, // 2  |       |
-		 1.f,  1.f  // 3  0-------2
-	};
-
-	float tex_coords[]{
-		// X     Y
-		0.f, 0.f, // 0  1-------3
-		0.f, 1.f, // 1  |       |
-		1.f, 0.f, // 2  |       |
-		1.f, 1.f  // 3  0-------2
-	};
-
-	uint indicies[] = {
-		0,2,3,
-		3,1,0
-	};
-
-	glGenVertexArrays(1, &buf.VAO);
-	glBindVertexArray(buf.VAO);
-
-	glGenBuffers(1, &buf.VBO);
-	glBindBuffer(GL_ARRAY_BUFFER, buf.VBO);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(verts) + sizeof(tex_coords), NULL, GL_STATIC_DRAW);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(verts), verts);
-	glBufferSubData(GL_ARRAY_BUFFER, sizeof(verts), sizeof(tex_coords), tex_coords);
-
-	glGenBuffers(1, &buf.EBO);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, buf.EBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indicies), indicies, GL_STATIC_DRAW);
-
-	uint offset = 0;
-	GLint vert_attrib = 0; // vertex position
-	glVertexAttribPointer(vert_attrib, 2, GL_FLOAT, GL_FALSE, sizeof(vec2), (void*)offset);
-	glEnableVertexAttribArray(vert_attrib);
-
-	offset += sizeof(verts);
-	GLint tex_attrib = 1; // texture coordinates
-	glVertexAttribPointer(tex_attrib, 2, GL_FLOAT, GL_FALSE, sizeof(vec2), (void*)offset);
-	glEnableVertexAttribArray(tex_attrib);
-
-	return buf;
-}
-void draw(G_Buffer g_buffer)
-{
-	glActiveTexture(GL_TEXTURE0); glBindTexture(GL_TEXTURE_2D, g_buffer.positions);
-	glActiveTexture(GL_TEXTURE1); glBindTexture(GL_TEXTURE_2D, g_buffer.normals);
-	glActiveTexture(GL_TEXTURE2); glBindTexture(GL_TEXTURE_2D, g_buffer.albedo);
-
-	glBindVertexArray(g_buffer.VAO);
-	glDrawElementsInstanced(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0, 1);
-}
-
-/* -- deferred rendering cheat sheet --
-
-	position = texture_unit 0
-	normal   = texture_unit 1
-	albedo   = texture_unit 2
-
-	GL_FRAMEBUFFER = 0 for default framebuffer
-*/
-
-// ------------------------------------------------- //
-// -------------------- Lighting ------------------- //
-// ------------------------------------------------- //
-
-Shader make_lighting_shader()
-{
-	Shader lighting_shader = {};
-	load(&lighting_shader, "assets/shaders/lighting.vert", "assets/shaders/lighting.frag");
-	bind(lighting_shader);
-
-	vec3 light_positions[4] = { vec3(9, 1.5, 6), vec3(50), vec3(50), vec3(50) };
-	vec3 light_colors   [4] = { vec3(.88, .34, .13), vec3(1), vec3(1), vec3(1) };
-
-	set_vec3(lighting_shader, "light_positions[0]", light_positions[0]);
-	set_vec3(lighting_shader, "light_positions[1]", light_positions[1]);
-	set_vec3(lighting_shader, "light_positions[2]", light_positions[2]);
-	set_vec3(lighting_shader, "light_positions[3]", light_positions[3]);
-
-	set_vec3(lighting_shader, "light_colors[0]", light_colors[0]);
-	set_vec3(lighting_shader, "light_colors[1]", light_colors[1]);
-	set_vec3(lighting_shader, "light_colors[2]", light_colors[2]);
-	set_vec3(lighting_shader, "light_colors[3]", light_colors[3]);
-
-	return lighting_shader;
-}
-
-// ------------------------------------------------- //
 // -------------------- 3D Camera ------------------ //
-// ------------------------------------------------- //
 
 #define DIR_FORWARD	0
 #define DIR_BACKWARD	1
@@ -719,3 +376,302 @@ void camera_update_pos(Camera* camera, int direction, float distance)
 	if (direction == DIR_RIGHT   ) camera->position += camera->right * distance;
 	if (direction == DIR_BACKWARD) camera->position -= camera->front * distance;
 }
+
+// -------------------- Other ------------------ //
+
+void setAttribPointer(GLuint vertexArrayObject, GLuint location, GLuint buffer, GLint size, GLenum type, GLboolean normalized, GLsizei stride, GLuint offset) {
+	assert((glIsBuffer(buffer) != GL_FALSE));
+
+	GLint previousBuffer;
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &previousBuffer);
+	{
+		GLint previousVAO;
+		glGetIntegerv(GL_VERTEX_ARRAY_BINDING, &previousVAO);
+		{
+			glBindVertexArray(vertexArrayObject);
+			glBindBuffer(GL_ARRAY_BUFFER, buffer);
+			glEnableVertexAttribArray(location);
+			glVertexAttribPointer(location, size, type, normalized, stride, reinterpret_cast<void*>(offset));
+		}
+		glBindVertexArray(previousVAO);
+	}
+	glBindBuffer(GL_ARRAY_BUFFER, previousBuffer);
+}
+
+GLuint import_texture(const char* path)
+{
+	int width, height, n;
+	byte* data = stbi_load(path, &width, &height, &n, 4);
+
+	GLuint id;
+	glGenTextures(1, &id);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, id);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	return id;
+}
+GLuint create_subsurf_texture()
+{
+	const int size = 3;
+	struct { GLubyte r, g, b; } pixel_data[3];
+	pixel_data[0] = { 2, 204, 147 };
+	pixel_data[1] = { 2, 127, 199 };
+	pixel_data[2] = { 1, 9  , 100 };
+	
+	GLuint id;
+	glGenTextures(1, &id);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_1D, id);
+
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+
+	glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, size, 0, GL_RGB, GL_UNSIGNED_BYTE, pixel_data);
+
+	glBindTexture(GL_TEXTURE_1D, 0);
+
+	return id;
+}
+GLuint createCubemap()
+{
+	GLuint id = {};
+	glGenTextures(1, &id);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, id);
+
+	int w, h, c;
+	byte* PositiveX = stbi_load("content/textures/sky_posx.jpg", &w, &h, &c, 4);
+	byte* NegativeX = stbi_load("content/textures/sky_negx.jpg", &w, &h, &c, 4);
+	byte* PositiveY = stbi_load("content/textures/sky_posy.jpg", &w, &h, &c, 4);
+	byte* NegativeY = stbi_load("content/textures/sky_negy.jpg", &w, &h, &c, 4);
+	byte* PositiveZ = stbi_load("content/textures/sky_posz.jpg", &w, &h, &c, 4);
+	byte* NegativeZ = stbi_load("content/textures/sky_negz.jpg", &w, &h, &c, 4);
+
+	auto n = 2048;
+
+	glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X, 0, GL_RGBA, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, PositiveX);
+	glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_X, 0, GL_RGBA, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, NegativeX);
+	glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Y, 0, GL_RGBA, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, PositiveY);
+	glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Y, 0, GL_RGBA, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, NegativeY);
+	glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_Z, 0, GL_RGBA, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, PositiveZ);
+	glTexImage2D(GL_TEXTURE_CUBE_MAP_NEGATIVE_Z, 0, GL_RGBA, n, n, 0, GL_RGBA, GL_UNSIGNED_BYTE, NegativeZ);
+
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	glGenerateMipmap(GL_TEXTURE_CUBE_MAP);
+
+	glBindTexture(GL_TEXTURE_CUBE_MAP, 0);
+
+	return id;
+}
+
+struct Framebuffer {
+	GLuint color; // texture
+	GLuint depth; // texture
+	GLuint id;
+};
+
+Framebuffer make_framebuffer(const unsigned width, const unsigned height)
+{
+	Framebuffer framebuffer = {};
+
+	glGenTextures(1, &framebuffer.color);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.color);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glGenTextures(1, &framebuffer.depth);
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, framebuffer.depth);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, width, height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, nullptr);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	glGenFramebuffers(1, &framebuffer.id);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, framebuffer.id);
+	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, framebuffer.color, 0);
+	glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT , GL_TEXTURE_2D, framebuffer.depth, 0);
+	glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+
+	return framebuffer;
+}
+
+enum Attrib {
+	Position       = 0,
+	Normal         = 1,
+	TexCoord       = 2,
+	VertexPosition = 3
+};
+
+struct Vertex {
+	vec3 position;
+	vec3 normal;
+	vec2 texCoord;
+};
+
+float heightFunction(vec2 coordinate)
+{
+	return 0 - coordinate.y;// sin(TWOPI * 8 * coordinate.x);
+	float COORDINATE_STRETCH = 5.0f;
+	float EFUNCTION_STRETCH = 10.0f;
+	float EFUNCTION_WEIGHT = -0.7f;
+	float NOISE_WEIGHT = 0.015f;
+	float NOISE_STRETCH = 6.0f;
+	float HEIGHT = 0.6f;
+
+	auto correctedCoordinate = (vec2{ 1.0 } - coordinate) * COORDINATE_STRETCH - vec2{ 0.0f };
+	auto efunction = (1.0f / sqrt(2.0f * PI)) * exp(-(1.0f / EFUNCTION_STRETCH) * correctedCoordinate.x * correctedCoordinate.x);
+
+	float height = static_cast<float>(HEIGHT * (0.1 + EFUNCTION_WEIGHT * efunction + NOISE_WEIGHT * glm::simplex(coordinate * NOISE_STRETCH)));
+
+	static float big = 0;
+	if (height > big)
+	{
+		big = height;
+		out(big);
+	}
+
+	return height;
+};
+void create_mesh(uint resolution, bool water, vec4* positions, vec4* normals, vec2* tex_coords, uint* indices)
+{
+	float DX = 0.1f / resolution; // offset for calculating normals
+
+	uint i = 0;
+	for (uint x = 0; x <= resolution; x++) {
+	for (uint y = 0; y <= resolution; y++)
+	{
+		vec2 normalized_position = vec2(x, y) / float(resolution);
+
+		// height of the vertex
+		float height = water ? 0.f : heightFunction(normalized_position);
+		vec3 position = { normalized_position.x, height, normalized_position.y };
+
+		// normal vector
+		vec2 dx_pos = normalized_position + vec2{ DX, 0  };
+		vec2 dy_pos = normalized_position + vec2{ 0 , DX };
+
+		float dx_height = water ? 0.f : heightFunction(dx_pos);
+		float dy_height = water ? 0.f : heightFunction(dy_pos);
+
+		vec3 dx_dir = vec3{ dx_pos.x, dx_height, dx_pos.y } - position;
+		vec3 dy_dir = vec3{ dy_pos.x, dy_height, dy_pos.y } - position;
+
+		vec3 normal = normalize(cross(dy_dir, dx_dir));
+		vec2 texture_coordinate = normalized_position;
+
+		positions  [i  ] = vec4(position, 0);
+		normals    [i  ] = vec4(normal  , 0);
+		tex_coords [i++] = texture_coordinate;
+	} }
+
+	// indices
+
+	uint vertices_per_row = resolution + 1;
+
+	i = 0;
+	for (uint x = 0; x < resolution; x++) {
+	for (uint y = 0; y < resolution; y++)
+	{
+		// Triangle 1
+		indices[i++] = (y + 0) * vertices_per_row + (x + 0);
+		indices[i++] = (y + 0) * vertices_per_row + (x + 1);
+		indices[i++] = (y + 1) * vertices_per_row + (x + 1);
+
+		// Triangle 2
+		indices[i++] = (y + 0) * vertices_per_row + (x + 0);
+		indices[i++] = (y + 1) * vertices_per_row + (x + 1);
+		indices[i++] = (y + 1) * vertices_per_row + (x + 0);
+	} }
+
+}
+
+struct Mesh
+{
+	GLuint positions[2];
+	GLuint normals;
+	GLuint tex_coords;
+	GLuint elementArrayBuffer;
+	GLuint VAO;
+	GLuint num_indices;
+	GLuint mesh_size;
+};
+
+void init(Mesh& mesh, uint resolution, bool water = false)
+{
+	uint num_vertices = (resolution + 1) * (resolution + 1);
+	uint num_indices  = resolution * resolution * 6;
+
+	vec4* positions  = Alloc(vec4, num_vertices);
+	vec4* normals    = Alloc(vec4, num_vertices);
+	vec2* tex_coords = Alloc(vec2, num_vertices);
+	uint* indices    = Alloc(uint, num_indices);
+
+	create_mesh(resolution, water, positions, normals, tex_coords, indices);
+
+	mesh.num_indices = num_indices;
+	mesh.mesh_size   = resolution;
+
+	// Position Buffers (2 of them)
+	glGenBuffers(2, mesh.positions);
+	glBindBuffer(GL_ARRAY_BUFFER, mesh.positions[0]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, positions, GL_DYNAMIC_COPY);
+
+	glBindBuffer(GL_ARRAY_BUFFER, mesh.positions[1]);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, positions, GL_DYNAMIC_COPY);
+
+	// Normal Buffer
+	glGenBuffers(1, &mesh.normals);
+	glBindBuffer(GL_ARRAY_BUFFER, mesh.normals);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, normals, GL_STATIC_DRAW);
+
+	// TexCoord Buffer
+	glGenBuffers(1, &mesh.tex_coords);
+	glBindBuffer(GL_ARRAY_BUFFER, mesh.tex_coords);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(vec2) * num_vertices, tex_coords, GL_STATIC_DRAW);
+
+	// Element Buffer
+	glGenBuffers(1, &mesh.elementArrayBuffer);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.elementArrayBuffer);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * mesh.num_indices, indices, GL_STATIC_DRAW);
+
+	glGenVertexArrays(1, &mesh.VAO);
+
+	setAttribPointer(mesh.VAO, Attrib::Position, mesh.positions[0], 3, GL_FLOAT, GL_FALSE, sizeof(vec4), 0);
+	setAttribPointer(mesh.VAO, Attrib::Normal  , mesh.normals     , 3, GL_FLOAT, GL_TRUE , sizeof(vec4), 0);
+	setAttribPointer(mesh.VAO, Attrib::TexCoord, mesh.tex_coords  , 2, GL_FLOAT, GL_FALSE, sizeof(vec2), 0);
+}
+void render(Mesh& mesh)
+{
+	static bool flip = false;
+	if (flip = !flip)
+		std::swap(mesh.positions[0], mesh.positions[1]);
+
+	glBindVertexArray(mesh.VAO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, mesh.elementArrayBuffer);
+	glDrawElements(GL_TRIANGLES, mesh.num_indices, GL_UNSIGNED_INT, nullptr);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+}
+
+// what the fuck is this
+//#define for0(VAR, MAX) for (std::remove_const<decltype(MAX)>::type VAR = 0; VAR < (MAX); VAR++)

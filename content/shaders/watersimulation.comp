@@ -29,9 +29,7 @@ uint calculateIndex(uvec2 location) {
 }
 
 uint clampedIndex(uvec2 location) {
-	return calculateIndex(uvec2(
-		max(0, min(Dimension - 1, location.x)), 
-		max(0, min(Dimension - 1, location.y))));
+	return calculateIndex(uvec2( max(0, min(Dimension - 1, location.x)), max(0, min(Dimension - 1, location.y))));
 }
 
 void main()
@@ -77,8 +75,7 @@ void main()
 		}
 
 		positionsNew[index] = position;
-		
-		vec4 normal = normals[index];
+
 		vec3 toPositiveX = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(1 , 0 ))].xyz;
 		vec3 toPositiveY = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(0 , 1 ))].xyz;
 		vec3 toNegativeX = positionsPrev[clampedIndex(gl_GlobalInvocationID.xy + uvec2(-1, 0 ))].xyz;
